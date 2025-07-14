@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyOKR - OKR Management System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#F59E0B',
+                        danger: '#EF4444',
+                        success: '#22C55E',
+                        warning: '#F59E0B',
+                        info: '#3B82F6'
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Styles */
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #10B981 0%, #3B82F6 100%);
+            transition: width 0.5s ease;
+        }
+        
+        .okr-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .sidebar-item {
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+            transform: translateX(4px);
+        }
+        
+        .sidebar-item.active {
+            background: rgba(59, 130, 246, 0.2);
+            border-right: 3px solid #3B82F6;
+        }
+        
+        .notification-badge {
+            background: linear-gradient(45deg, #FF6B6B, #FF8E8E);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .status-badge {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .status-badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .status-badge:hover::before {
+            left: 100%;
+        }
+        
+        .okr-progress-ring {
+            stroke-dasharray: 251.2;
+            stroke-dashoffset: 251.2;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        
+        .team-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .department-card {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .user-avatar {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useContext, createContext } = React;
+
+        // ==================== DATA MODELS ====================
+        
+        // Mock Database with complete organizational hierarchy
+        const initialDatabase = {
+            organizations: [
+                {
+                    id: 1,
+                    name: 'TechCorp Solutions',
+                    description: 'Leading technology solutions provider',
+                    founded: '2020',
+                    employees: 250,
+                    logo: '🏢'
+                }
+            ],
+            departments: [
+                {
+                    id: 1,
+                    name: 'Engineering',
+                    orgId: 1,
+                    description: 'Product development and technical innovation',
+                    head: 'John Doe',
+                    budget: 2500000,
+                    employees: 45
+                },
+                {
+                    id: 2,
+                    name: 'Marketing',
+                    orgId: 1,
+                    description: 'Brand management and customer acquisition',
+                    head: 'Sarah Johnson',
+                    budget: 1200000,
+                    employees: 25
+                },
+                {
+                    id: 3,
+                    name: 'Sales',
+                    orgId: 1,
+                    description: 'Revenue generation and client relationships',
+                    head: 'Mike Wilson',
+                    budget: 800000,
+                    employees: 30
+                }
+            ],
+            teams: [
+                {
+                    id: 1,
+                    name: 'Frontend Development',
+                    deptId: 1,
+                    description: 'User interface and experience development',
+                    lead: 'Alice Brown',
+                    members: 8,
+                    technologies: ['React', 'TypeScript', 'Tailwind CSS']
+                },
+                {
+                    id: 2,
+                    name: 'Backend Development',
+                    deptId: 1,
+                    description: 'Server-side development and API design',
+                    lead: 'Bob Wilson',
+                    members: 12,
+                    technologies: ['Node.js', 'Python', 'PostgreSQL']
+                },
+                {
+                    id: 3,
+                    name: 'DevOps',
+                    deptId: 1,
+                    description: 'Infrastructure and deployment automation',
+                    lead: 'Charlie Davis',
+                    members: 6,
+                    technologies: ['AWS', 'Docker', 'Kubernetes']
+                },
+                {
+                    id: 4,
+                    name: 'Digital Marketing',
+                    deptId: 2,
+                    description: 'Online presence and digital campaigns',
+                    lead: 'Diana Miller',
+                    members: 10,
+                    technologies: ['Google Analytics', 'SEO', 'Social Media']
+                },
+                {
+                    id: 5,
+                    name: 'Content Marketing',
+                    deptId: 2,
+                    description: 'Content creation and strategy',
+                    lead: 'Eva Garcia',
+                    members: 8,
+                    technologies: ['WordPress', 'Adobe Creative Suite']
+                },
+                {
+                    id: 6,
+                    name: 'Enterprise Sales',
+                    deptId: 3,
+                    description: 'Large enterprise client acquisition',
+                    lead: 'Frank Thompson',
+                    members: 12,
+                    technologies: ['Salesforce', 'HubSpot']
+                }
+            ],
+            users: [
+                {
+                    id: 1,
+                    name: 'John Doe',
+                    email: 'john@techcorp.com',
+                    role: 'admin',
+                    orgId: 1,
+                    deptId: 1,
+                    teamId: 1,
+                    position: 'Engineering Director',
+                    joinDate: '2020-01-15',
+                    avatar: '👨‍💼'
+                },
+                {
+                    id: 2,
+                    name: 'Alice Brown',
+                    email: 'alice@techcorp.com',
+                    role: 'manager',
+                    orgId: 1,
+                    deptId: 1,
+                    teamId: 1,
+                    position: 'Frontend Team Lead',
+                    joinDate: '2020-03-10',
+                    avatar: '👩‍💻'
+                },
+                {
+                    id: 3,
+                    name: 'Bob Wilson',
+                    email: 'bob@techcorp.com',
+                    role: 'manager',
+                    orgId: 1,
+                    deptId: 1,
+                    teamId: 2,
+                    position: 'Backend Team Lead',
+                    joinDate: '2020-02-20',
+                    avatar: '👨‍💻'
+                },
+                {
+                    id: 4,
+                    name: 'Charlie Davis',
+                    email: 'charlie@techcorp.com',
+                    role: 'manager',
+                    orgId: 1,
+                    deptId: 1,
+                    teamId: 3,
+                    position: 'DevOps Team Lead',
+                    joinDate: '2020-04-05',
+                    avatar: '👨‍🔧'
+                },
+                {
+                    id: 5,
+                    name: 'Diana Miller',
+                    email: 'diana@techcorp.com',
+                    role: 'manager',
+                    orgId: 1,
+                    deptId: 2,
+                    teamId: 4,
+                    position: 'Digital Marketing Lead',
+                    joinDate: '2020-05-12',
+                    avatar: '👩‍💼'
+                },
+                {
+                    id: 6,
+                    name: 'Eva Garcia',
+                    email: 'eva@techcorp.com',
+                    role: 'user',
+                    orgId: 1,
+                    deptId: 2,
+                    teamId: 5,
+                    position: 'Content Strategist',
+                    joinDate: '2020-06-18',
+                    avatar: '👩‍🎨'
+                },
+                {
+                    id: 7,
+                    name: 'Frank Thompson',
+                    email: 'frank@techcorp.com',
+                    role: 'manager',
+                    orgId: 1,
+                    deptId: 3,
+                    teamId: 6,
+                    position: 'Sales Manager',
+                    joinDate: '2020-07-22',
+                    avatar: '👨‍💼'
+                },
+                {
+                    id: 8,
+                    name: 'Grace Lee',
+                    email: 'grace@techcorp.com',
+                    role: 'user',
+                    orgId: 1,
+                    deptId: 1,
+                    teamId: 1,
+                    position: 'Senior Frontend Developer',
+                    joinDate: '2020-08-15',
+                    avatar: '👩‍💻'
+                },
+                {
+                    id: 9,
+                    name: 'Henry Kim',
+                    email: 'henry@techcorp.com',
+                    role: 'user',
+                    orgId: 1,
+                    deptId: 1,
+                    teamId: 2,
+                    position: 'Backend Developer',
+                    joinDate: '2020-09-10',
+                    avatar: '👨‍💻'
+                },
+                {
+                    id: 10,
+                    name: 'Ivy Chen',
+                    email: 'ivy@techcorp.com',
+                    role: 'user',
+                    orgId: 1,
+                    deptId: 2,
+                    teamId: 4,
+                    position: 'Marketing Specialist',
+                    joinDate: '2020-10-05',
+                    avatar: '👩‍💼'
+                }
+            ],
+            okrs: [
+                {
+                    id: 1,
+                    teamId: 1,
+                    title: 'Enhance User Experience Excellence',
+                    description: 'Deliver exceptional user experience through improved performance, accessibility, and user satisfaction metrics',
+                    progress: 75,
+                    startDate: '2024-01-01',
+                    endDate: '2024-03-31',
+                    assignedTo: [2, 8],
+                    status: 'in-progress',
+                    priority: 'high',
+                    category: 'Product',
+                    createdBy: 1,
+                    createdAt: '2024-01-01',
+                    updatedAt: '2024-02-15',
+                    keyResults: [
+                        {
+                            id: 1,
+                            description: 'Reduce average page load time to under 2 seconds',
+                            progress: 85,
+                            target: 100,
+                            unit: 'seconds',
+                            currentValue: 2.2,
+                            targetValue: 2.0,
+                            owner: 8
+                        },
+                        {
+                            id: 2,
+                            description: 'Achieve user satisfaction score of 4.5/5 or higher',
+                            progress: 70,
+                            target: 100,
+                            unit: 'rating',
+                            currentValue: 4.2,
+                            targetValue: 4.5,
+                            owner: 2
+                        },
+                        {
+                            id: 3,
+                            description: 'Implement 8 high-priority accessibility features',
+                            progress: 62,
+                            target: 100,
+                            unit: 'features',
+                            currentValue: 5,
+                            targetValue: 8,
+                            owner: 8
+                        }
+                    ],
+                    comments: [
+                        {
+                            id: 1,
+                            userId: 2,
+                            content: 'Great progress on page load optimization!',
+                            timestamp: '2024-02-10'
+                        }
+                    ]
+                },
+                {
+                    id: 2,
+                    teamId: 2,
+                    title: 'API Performance & Scalability',
+                    description: 'Optimize backend systems for improved performance, reliability, and scalability to support growing user base',
+                    progress: 60,
+                    startDate: '2024-01-01',
+                    endDate: '2024-04-30',
+                    assignedTo: [3, 9],
+                    status: 'in-progress',
+                    priority: 'high',
+                    category: 'Technical',
+                    createdBy: 1,
+                    createdAt: '2024-01-01',
+                    updatedAt: '2024-02-20',
+                    keyResults: [
+                        {
+                            id: 4,
+                            description: 'Reduce API response time by 40%',
+                            progress: 65,
+                            target: 100,
+                            unit: 'percentage',
+                            currentValue: 25,
+                            targetValue: 40,
+                            owner: 3
+                        },
+                        {
+                            id: 5,
+                            description: 'Achieve 99.9% uptime reliability',
+                            progress: 80,
+                            target: 100,
+                            unit: 'percentage',
+                            currentValue: 99.7,
+                            targetValue: 99.9,
+                            owner: 9
+                        },
+                        {
+                            id: 6,
+                            description: 'Handle 10,000 concurrent users without degradation',
+                            progress: 35,
+                            target: 100,
+                            unit: 'users',
+                            currentValue: 6500,
+                            targetValue: 10000,
+                            owner: 3
+                        }
+                    ]
+                },
+                {
+                    id: 3,
+                    teamId: 3,
+                    title: 'Infrastructure Automation & Security',
+                    description: 'Enhance deployment pipeline automation and strengthen security posture across all systems',
+                    progress: 45,
+                    startDate: '2024-01-15',
+                    endDate: '2024-06-15',
+                    assignedTo: [4],
+                    status: 'in-progress',
+                    priority: 'medium',
+                    category: 'Operations',
+                    createdBy: 1,
+                    createdAt: '2024-01-15',
+                    updatedAt: '2024-02-25',
+                    keyResults: [
+                        {
+                            id: 7,
+                            description: 'Reduce deployment time to under 15 minutes',
+                            progress: 60,
+                            target: 100,
+                            unit: 'minutes',
+                            currentValue: 25,
+                            targetValue: 15,
+                            owner: 4
+                        },
+                        {
+                            id: 8,
+                            description: 'Implement automated security scanning for 100% of deployments',
+                            progress: 40,
+                            target: 100,
+                            unit: 'percentage',
+                            currentValue: 60,
+                            targetValue: 100,
+                            owner: 4
+                        },
+                        {
+                            id: 9,
+                            description: 'Achieve zero critical security vulnerabilities',
+                            progress: 30,
+                            target: 100,
+                            unit: 'vulnerabilities',
+                            currentValue: 3,
+                            targetValue: 0,
+                            owner: 4
+                        }
+                    ]
+                },
+                {
+                    id: 4,
+                    teamId: 4,
+                    title: 'Digital Marketing Growth',
+                    description: 'Drive significant growth in online presence, lead generation, and brand awareness through digital channels',
+                    progress: 68,
+                    startDate: '2024-01-01',
+                    endDate: '2024-06-30',
+                    assignedTo: [5, 10],
+                    status: 'in-progress',
+                    priority: 'high',
+                    category: 'Marketing',
+                    createdBy: 1,
+                    createdAt: '2024-01-01',
+                    updatedAt: '2024-02-28',
+                    keyResults: [
+                        {
+                            id: 10,
+                            description: 'Increase organic website traffic by 150%',
+                            progress: 80,
+                            target: 100,
+                            unit: 'percentage',
+                            currentValue: 120,
+                            targetValue: 150,
+                            owner: 5
+                        },
+                        {
+                            id: 11,
+                            description: 'Generate 500 qualified leads per month',
+                            progress: 70,
+                            target: 100,
+                            unit: 'leads',
+                            currentValue: 350,
+                            targetValue: 500,
+                            owner: 10
+                        },
+                        {
+                            id: 12,
+                            description: 'Achieve 25% increase in social media engagement',
+                            progress: 55,
+                            target: 100,
+                            unit: 'percentage',
+                            currentValue: 14,
+                            targetValue: 25,
+                            owner: 5
+                        }
+                    ]
+                },
+                {
+                    id: 5,
+                    teamId: 6,
+                    title: 'Enterprise Sales Expansion',
+                    description: 'Expand enterprise client base and increase revenue from large-scale implementations',
+                    progress: 42,
+                    startDate: '2024-01-01',
+                    endDate: '2024-12-31',
+                    assignedTo: [7],
+                    status: 'in-progress',
+                    priority: 'high',
+                    category: 'Sales',
+                    createdBy: 1,
+                    createdAt: '2024-01-01',
+                    updatedAt: '2024-02-29',
+                    keyResults: [
+                        {
+                            id: 13,
+                            description: 'Close 12 enterprise deals worth $100K+ each',
+                            progress: 33,
+                            target: 100,
+                            unit: 'deals',
+                            currentValue: 4,
+                            targetValue: 12,
+                            owner: 7
+                        },
+                        {
+                            id: 14,
+                            description: 'Achieve $2M in annual recurring revenue',
+                            progress: 45,
+                            target: 100,
+                            unit: 'revenue',
+                            currentValue: 900000,
+                            targetValue: 2000000,
+                            owner: 7
+                        },
+                        {
+                            id: 15,
+                            description: 'Maintain 90% client retention rate',
+                            progress: 85,
+                            target: 100,
+                            unit: 'percentage',
+                            currentValue: 87,
+                            targetValue: 90,
+                            owner: 7
+                        }
+                    ]
+                }
+            ]
+        };
+
+        // ==================== CONTEXTS ====================
+        
+        const AuthContext = createContext();
+        const DataContext = createContext();
+        const NotificationContext = createContext();
+
+        // ==================== CUSTOM HOOKS ====================
+        
+        const useAuth = () => {
+            const context = useContext(AuthContext);
+            if (!context) {
+                throw new Error('useAuth must be used within an AuthProvider');
+            }
+            return context;
+        };
+
+        const useData = () => {
+            const context = useContext(DataContext);
+            if (!context) {
+                throw new Error('useData must be used within a DataProvider');
+            }
+            return context;
+        };
+
+        const useNotifications = () => {
+            const context = useContext(NotificationContext);
+            if (!context) {
+                throw new Error('useNotifications must be used within a NotificationProvider');
+            }
+            return context;
+        };
+
+        // ==================== UTILITY FUNCTIONS ====================
+        
+        const formatDate = (dateString) => {
+            return new Date(dateString).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        };
+
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(amount);
+        };
+
+        const calculateProgress = (keyResults) => {
+            if (!keyResults || keyResults.length === 0) return 0;
+            const total = keyResults.reduce((sum, kr) => sum + kr.progress, 0);
+            return Math.round(total / keyResults.length);
+        };
+
+        const getStatusColor = (status) => {
+            const colors = {
+                'completed': 'bg-green-100 text-green-800',
+                'in-progress': 'bg-blue-100 text-blue-800',
+                'at-risk': 'bg-yellow-100 text-yellow-800',
+                'not-started': 'bg-gray-100 text-gray-800',
+                'blocked': 'bg-red-100 text-red-800'
+            };
+            return colors[status] || colors['not-started'];
+        };
+
+        const getPriorityColor = (priority) => {
+            const colors = {
+                'high': 'bg-red-100 text-red-800',
+                'medium': 'bg-yellow-100 text-yellow-800',
+                'low': 'bg-green-100 text-green-800'
+            };
+            return colors[priority] || colors['medium'];
+        };
+
+        // ==================== PROVIDERS ====================
+        
+        const AuthProvider = ({ children }) => {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [loading, setLoading] = useState(false);
+
+            const login = async (email, password) => {
+                setLoading(true);
+                try {
+                    // Simulate API call
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    const user = initialDatabase.users.find(u => u.email === email);
+                    if (user && password === 'password') { // Demo password
+                        setCurrentUser(user);
+                        setIsAuthenticated(true);
+                        return { success: true };
+                    }
+                    return { success: false, message: 'Invalid credentials' };
+                } catch (error) {
+                    return { success: false, message: 'Login failed' };
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const logout = () => {
+                setCurrentUser(null);
+                setIsAuthenticated(false);
+            };
+
+            const value = {
+                currentUser,
+                isAuthenticated,
+                loading,
+                login,
+                logout
+            };
+
+            return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+        };
+
+        const DataProvider = ({ children }) => {
+            const [data, setData] = useState(initialDatabase);
+            const { addNotification } = useNotifications();
+
+            // CRUD Operations for OKRs
+            const createOKR = (okrData) => {
+                const newOKR = {
+                    ...okrData,
+                    id: Date.now(),
+                    progress: 0,
+                    status: 'not-started',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    keyResults: okrData.keyResults.map((kr, index) => ({
+                        ...kr,
+                        id: Date.now() + index,
+                        progress: 0
+                    }))
+                };
+
+                setData(prev => ({
+                    ...prev,
+                    okrs: [...prev.okrs, newOKR]
+                }));
+
+                addNotification({
+                    type: 'success',
+                    message: 'OKR created successfully',
+                    title: 'Success'
+                });
+
+                return newOKR;
+            };
+
+            const updateOKR = (id, updatedData) => {
+                setData(prev => ({
+                    ...prev,
+                    okrs: prev.okrs.map(okr => 
+                        okr.id === id ? { 
+                            ...okr, 
+                            ...updatedData,
+                            updatedAt: new Date().toISOString()
+                        } : okr
+                    )
+                }));
+
+                addNotification({
+                    type: 'success',
+                    message: 'OKR updated successfully',
+                    title: 'Success'
+                });
+            };
+
+            const deleteOKR = (id) => {
+                setData(prev => ({
+                    ...prev,
+                    okrs: prev.okrs.filter(okr => okr.id !== id)
+                }));
+
+                addNotification({
+                    type: 'success',
+                    message: 'OKR deleted successfully',
+                    title: 'Success'
+                });
+            };
+
+            const updateKeyResult = (okrId, keyResultId, progress) => {
+                setData(prev => ({
+                    ...prev,
+                    okrs: prev.okrs.map(okr => {
+                        if (okr.id === okrId) {
+                            const updatedKeyResults = okr.keyResults.map(kr => 
+                                kr.id === keyResultId ? { ...kr, progress } : kr
+                            );
+                            const newProgress = calculateProgress(updatedKeyResults);
+                            
+                            return {
+                                ...okr,
+                                keyResults: updatedKeyResults,
+                                progress: newProgress,
+                                updatedAt: new Date().toISOString()
+                            };
+                        }
+                        return okr;
+                    })
+                }));
+            };
+
+            const addComment = (okrId, comment) => {
+                setData(prev => ({
+                    ...prev,
+                    okrs: prev.okrs.map(okr => {
+                        if (okr.id === okrId) {
+                            return {
+                                ...okr,
+                                comments: [...(okr.comments || []), {
+                                    id: Date.now(),
+                                    ...comment,
+                                    timestamp: new Date().toISOString()
+                                }]
+                            };
+                        }
+                        return okr;
+                    })
+                }));
+            };
+
+            const value = {
+                data,
+                createOKR,
+                updateOKR,
+                deleteOKR,
+                updateKeyResult,
+                addComment
+            };
+
+            return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+        };
+
+        const NotificationProvider = ({ children }) => {
+            const [notifications, setNotifications] = useState([]);
+
+            const addNotification = (notification) => {
+                const id = Date.now();
+                const newNotification = {
+                    id,
+                    ...notification,
+                    timestamp: new Date().toISOString()
+                };
+
+                setNotifications(prev => [...prev, newNotification]);
+
+                // Auto remove after 5 seconds
+                setTimeout(() => {
+                    removeNotification(id);
+                }, 5000);
+            };
+
+            const removeNotification = (id) => {
+                setNotifications(prev => prev.filter(notif => notif.id !== id));
+            };
+
+            const value = {
+                notifications,
+                addNotification,
+                removeNotification
+            };
+
+            return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
+        };
+
+        // ==================== COMPONENTS ====================
+        
+        // Notification System
+        const NotificationContainer = () => {
+            const { notifications, removeNotification } = useNotifications();
+
+            return (
+                <div className="fixed top-4 right-4 z-50 space-y-2">
+                    {notifications.map(notification => (
+                        <div
+                            key={notification.id}
+                            className={`p-4 rounded-lg shadow-lg max-w-sm animate-slide-up ${
+                                notification.type === 'success' ? 'bg-green-500 text-white' :
+                                notification.type === 'error' ? 'bg-red-500 text-white' :
+                                notification.type === 'warning'
